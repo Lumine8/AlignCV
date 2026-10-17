@@ -1,0 +1,24 @@
+Senior Machine Learning Engineer - Search Relevance (Example Posting)
+
+About the role
+We are looking for a Senior Machine Learning Engineer to join our Search Relevance team.
+
+Responsibilities
+- Design and build large-scale machine learning systems for search and ranking.
+- Develop and deploy natural language processing models to production.
+- Collaborate with data engineers to build ETL pipelines and data infrastructure.
+- Own model training, evaluation, and monitoring in production.
+
+Requirements
+- 5+ years of professional software engineering experience.
+- Strong proficiency in Python and SQL.
+- Experience with machine learning frameworks such as PyTorch or TensorFlow.
+- Hands-on experience with natural language processing and information retrieval.
+- Experience with AWS and containerization using Docker.
+- Bachelor's degree in Computer Science or a related field.
+
+Preferred qualifications
+- Experience with Kubernetes and Airflow.
+- Familiarity with PostgreSQL and distributed data processing with Spark.
+- Experience with vector search or semantic search systems.
+- A plus: experience with Rust or Go for performance-critical services.
