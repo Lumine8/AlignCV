@@ -355,7 +355,8 @@ export default function Workspace() {
                 onChange={(e) => setJobUrl(e.target.value)}
               />
               <span className="hint">
-                Login-gated or JavaScript-heavy pages may fail; use the text option then.
+                Postings hosted on Greenhouse, Lever, Ashby or SmartRecruiters load automatically.
+                Login-gated or JavaScript-heavy pages may still fail; use the text option then.
               </span>
             </div>
           ) : (

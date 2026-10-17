@@ -227,11 +227,149 @@ function cleanHtml(html) {
   return { text, title, company, location: ldLocation };
 }
 
+// ---------------------------------------------------------------- ATS APIs
+// Many companies host postings on an ATS whose public JSON API allows browser
+// (CORS) requests. Using it is more reliable than scraping HTML and needs no
+// proxy. We only ever call the site's own API.
+
+export function parseAtsUrl(raw) {
+  let u;
+  try {
+    u = new URL(raw);
+  } catch (_) {
+    return null;
+  }
+  const host = u.hostname.toLowerCase();
+  const parts = u.pathname.split("/").filter(Boolean);
+  const greenhouse = (company, id) => ({
+    kind: "greenhouse",
+    company,
+    id,
+    apiUrl: `https://boards-api.greenhouse.io/v1/boards/${company}/jobs/${id}?questions=false`,
+  });
+
+  if (host === "boards.greenhouse.io" || host === "job-boards.greenhouse.io") {
+    if (u.pathname.startsWith("/embed/job_app")) {
+      const company = u.searchParams.get("for");
+      const id = u.searchParams.get("token");
+      return company && id ? greenhouse(company, id) : null;
+    }
+    const m = u.pathname.match(/\/([^/]+)\/jobs\/(\d+)/);
+    return m ? greenhouse(m[1], m[2]) : null;
+  }
+  if (host === "jobs.lever.co" || host === "jobs.eu.lever.co") {
+    const [company, id] = parts;
+    return company && id
+      ? { kind: "lever", company, id, apiUrl: `https://api.lever.co/v0/postings/${company}/${id}?mode=json` }
+      : null;
+  }
+  if (host === "jobs.ashbyhq.com") {
+    const [org, id] = parts;
+    return org && id
+      ? { kind: "ashby", company: org, id, apiUrl: `https://api.ashbyhq.com/posting-api/job-board/${org}?includeCompensation=true` }
+      : null;
+  }
+  if (host === "jobs.smartrecruiters.com" || host === "careers.smartrecruiters.com") {
+    const [company, slug] = parts;
+    if (!company || !slug) return null;
+    const id = slug.split("-")[0];
+    return { kind: "smartrecruiters", company, id, apiUrl: `https://api.smartrecruiters.com/v1/companies/${company}/postings/${id}` };
+  }
+  return null;
+}
+
+function decodeHtml(html) {
+  return new DOMParser().parseFromString(html || "", "text/html").documentElement.textContent || "";
+}
+
+function htmlToText(html) {
+  return html ? elementText(new DOMParser().parseFromString(html, "text/html").body) : "";
+}
+
+async function fetchJson(url, timeoutMs = 15000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { signal: controller.signal, headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const ATS_MAPPERS = {
+  greenhouse(data, ats) {
+    return {
+      title: data.title || "",
+      company: (data.company && data.company.name) || ats.company,
+      location: (data.location && data.location.name) || "",
+      text: [data.title, htmlToText(decodeHtml(data.content))].filter(Boolean).join("\n\n"),
+    };
+  },
+  lever(data, ats) {
+    const lists = (data.lists || []).map((l) => [l.text, htmlToText(l.content)].filter(Boolean).join("\n")).join("\n\n");
+    return {
+      title: data.text || "",
+      company: ats.company,
+      location: (data.categories && data.categories.location) || "",
+      text: [data.text, data.descriptionPlain, lists, data.additional ? htmlToText(data.additional) : ""].filter(Boolean).join("\n\n"),
+    };
+  },
+  ashby(data, ats) {
+    const jobs = data.jobs || [];
+    const job = jobs.find((j) => String(j.id).toLowerCase() === ats.id.toLowerCase());
+    if (!job) return null;
+    return {
+      title: job.title || "",
+      company: ats.company,
+      location: job.location || "",
+      text: [job.title, job.descriptionPlain || htmlToText(job.descriptionHtml)].filter(Boolean).join("\n\n"),
+    };
+  },
+  smartrecruiters(data, ats) {
+    const s = (data.jobAd && data.jobAd.sections) || {};
+    const sections = [s.jobDescription, s.qualifications, s.additionalInformation].filter(Boolean).map((x) => htmlToText(x.text));
+    const loc = data.location || {};
+    return {
+      title: data.name || "",
+      company: (data.company && data.company.name) || ats.company,
+      location: [loc.city, loc.region, loc.country].filter(Boolean).join(", "),
+      text: [data.name, ...sections].filter(Boolean).join("\n\n"),
+    };
+  },
+};
+
+async function resolveFromAts(url) {
+  const ats = parseAtsUrl(url);
+  if (!ats) return null;
+  const data = await fetchJson(ats.apiUrl);
+  const job = ATS_MAPPERS[ats.kind](data, ats);
+  return job && job.text && job.text.length >= 80 ? job : null;
+}
+
 export async function fetchJobFromUrl(url) {
   const trimmed = (url || "").trim();
   if (!/^https?:\/\//i.test(trimmed)) {
     throw new Error("Enter a public http(s) job posting URL.");
   }
+
+  // Prefer the posting's own public API when the URL belongs to a known ATS.
+  try {
+    const resolved = await resolveFromAts(trimmed);
+    if (resolved) {
+      return structureJob(resolved.text, {
+        url: trimmed,
+        source: "url",
+        title: resolved.title,
+        company: resolved.company,
+        location: resolved.location,
+      });
+    }
+  } catch (_) {
+    // Fall through to a direct HTML fetch.
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 15000);
   let response;

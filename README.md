@@ -22,9 +22,10 @@ and no server that receives your data.
 - **Resume ingestion** — `.tex` (LaTeX-preserving parser) and `.pdf` (via
   [PDF.js](https://mozilla.github.io/pdf.js/): text extraction, link recovery,
   scanned-page detection).
-- **Job extraction** — paste text directly, or fetch a public URL with a
-  CORS-aware fetcher that asks you to paste instead when a site blocks browser
-  access.
+- **Job extraction** — paste text directly, or import a public URL. Postings
+  hosted on **Greenhouse, Lever, Ashby or SmartRecruiters** are read from each
+  platform's own public, CORS-enabled JSON API; other pages use a CORS-aware
+  HTML fetch that asks you to paste instead when a site blocks browser access.
 - **Traditional engine** — exact + alias matching, must-have vs preferred rules,
   experience-duration derivation, a configurable skill dictionary.
 - **Semantic engine** — optional **local AI embeddings** via
@@ -156,7 +157,7 @@ engines:
 | `skills.js` | Skill dictionary with legitimate aliases + tokenizer |
 | `texParser.js` | `.tex` → structured resume (sections, items, skills) |
 | `pdfExtractor.js` | PDF.js extraction → structured resume |
-| `jobExtractor.js` | Job text structuring + CORS-aware URL fetch |
+| `jobExtractor.js` | Job text structuring + ATS public-API + CORS-aware URL fetch |
 | `matching/index.js` | Searchable resume index + experience duration |
 | `matching/traditional.js` | Deterministic exact/alias/rule matching |
 | `matching/semantic.js` | Embedding matching (local AI or lexical) |
@@ -207,7 +208,8 @@ the UI never claims a PDF was produced.
 ## Limitations (honest by design)
 
 - Scores are AlignCV's estimates, not an ATS's.
-- Browser CORS blocks many job URLs; paste the description in that case.
+- Browser CORS blocks some job URLs (Greenhouse/Lever/Ashby/SmartRecruiters are
+  supported via their public APIs); paste the description for the rest.
 - The lexical semantic fallback estimates relatedness, not proof of experience.
 - PDF resume parsing cannot recover the original LaTeX, so it reconstructs a
   clean editable representation.

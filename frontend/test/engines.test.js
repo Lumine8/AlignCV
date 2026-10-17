@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { latexToText, parseDateRange, splitTitleDates, stripComments } from "../src/lib/text.js";
 import { canonicalSkill, isKnownSkill, tokenize } from "../src/lib/skills.js";
 import { parseTex } from "../src/lib/texParser.js";
-import { extractJobFromText } from "../src/lib/jobExtractor.js";
+import { extractJobFromText, parseAtsUrl } from "../src/lib/jobExtractor.js";
 import { runTraditional } from "../src/lib/matching/traditional.js";
 import { runSemantic } from "../src/lib/matching/semantic.js";
 import { reconcile, fingerprint } from "../src/lib/matching/reconciliation.js";
@@ -70,6 +70,36 @@ describe("job extraction", () => {
     expect(job.requirements.length).toBeGreaterThan(5);
     expect(job.requirements.some((r) => r.must_have)).toBe(true);
     expect(job.requirements.some((r) => /Python/i.test(r.text) && r.keywords.includes("Python"))).toBe(true);
+  });
+
+  it("resolves known ATS URLs to their public API endpoints", () => {
+    expect(parseAtsUrl("https://boards.greenhouse.io/acme/jobs/12345")).toMatchObject({
+      kind: "greenhouse",
+      company: "acme",
+      id: "12345",
+      apiUrl: "https://boards-api.greenhouse.io/v1/boards/acme/jobs/12345?questions=false",
+    });
+    expect(parseAtsUrl("https://boards.greenhouse.io/embed/job_app?for=acme&token=99")).toMatchObject({
+      kind: "greenhouse",
+      company: "acme",
+      id: "99",
+    });
+    expect(parseAtsUrl("https://jobs.lever.co/acme/abc-123/apply")).toMatchObject({
+      kind: "lever",
+      company: "acme",
+      id: "abc-123",
+    });
+    expect(parseAtsUrl("https://jobs.ashbyhq.com/acme/xyz")).toMatchObject({ kind: "ashby", company: "acme", id: "xyz" });
+    expect(parseAtsUrl("https://jobs.smartrecruiters.com/Acme/744000012345678-Senior-Engineer")).toMatchObject({
+      kind: "smartrecruiters",
+      company: "Acme",
+      id: "744000012345678",
+    });
+  });
+
+  it("returns null for non-ATS and invalid URLs", () => {
+    expect(parseAtsUrl("https://careers.example.com/jobs/1")).toBeNull();
+    expect(parseAtsUrl("not a url")).toBeNull();
   });
 });
 
