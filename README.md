@@ -91,6 +91,23 @@ powershell -ExecutionPolicy Bypass -File scripts/build.ps1  # static build
 
 ---
 
+## Testing
+
+The ported engines are covered by a [Vitest](https://vitest.dev/) suite
+(`frontend/test/engines.test.js`) — text/date utilities, the skill dictionary,
+`.tex` parsing, job structuring, both matching engines, hybrid reconciliation,
+the suggestion/claim guards, and LaTeX rendering + validation.
+
+```powershell
+cd frontend
+npm test          # run once
+npm run test:watch
+```
+
+Run `npm test` and `npm run build` before committing.
+
+---
+
 ## Deploying as a static site
 
 The production build is plain static files, so any static host works. The app
@@ -210,6 +227,7 @@ AlignCV/
 │  │  ├─ pages/               # Landing, Workspace, MatchReport, Editor, Export
 │  │  ├─ state/session.jsx    # workflow state (localStorage)
 │  │  └─ styles/              # SCSS
+│  ├─ test/                   # Vitest suite + fixtures
 │  ├─ index.html
 │  └─ vite.config.js
 ├─ scripts/                   # dev.ps1 / build.ps1
