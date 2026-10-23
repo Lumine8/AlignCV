@@ -310,3 +310,104 @@ code, pre { font-family: $font-mono; font-size: 0.86em; }
   &.active { color: $text; }
   &.done { color: $success; }
 }
+
+// ------------------------------ Create wizard ------------------------------
+.wizard-steps { display: flex; gap: 8px; flex-wrap: wrap; margin: 20px 0; }
+.wizard-steps__item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px; border-radius: 999px; border: 1px solid $border;
+  background: transparent; color: $text-dim; font: inherit; font-size: 0.8rem; cursor: pointer;
+  &.active { color: $text; border-color: $accent-soft; background: rgba(99, 102, 241, 0.12); }
+  &.done { color: $success; border-color: rgba(52, 211, 153, 0.4); }
+}
+.wizard-steps__num {
+  width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+  background: $bg-elevated-2; font-size: 0.7rem;
+}
+
+.entry-card {
+  border: 1px solid $border; border-radius: $radius; background: $bg-elevated;
+  padding: 16px; margin-bottom: 14px;
+}
+.entry-card__head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid $border;
+}
+.entry-card .entry-card { background: $bg; margin-top: 12px; }
+
+.bullet { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; margin-bottom: 8px; }
+.bullet__actions { display: flex; gap: 4px; }
+.bullet-input { min-height: 56px; padding: 8px 10px; font-family: $font-sans; font-size: 0.9rem; }
+
+.date-range { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
+.date-range__group { display: flex; flex-direction: column; gap: 4px; }
+.date-range__group .input { width: auto; min-width: 120px; }
+.checkbox { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: $text-muted; padding-bottom: 10px; }
+
+.skill-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 8px; margin-bottom: 8px; align-items: center; }
+@media (max-width: $bp-md) { .skill-row { grid-template-columns: 1fr 1fr; } }
+
+.section-order__row {
+  display: flex; align-items: center; gap: 8px; padding: 8px 0;
+  border-bottom: 1px solid $border; font-size: 0.9rem;
+  &:last-child { border-bottom: none; }
+}
+
+.hint--error { color: $danger; }
+
+.review-entry { padding: 8px 0; border-bottom: 1px dashed $border; }
+.review-entry:last-child { border-bottom: none; }
+
+// ------------------------------ Motion ------------------------------
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pop {
+  0% { transform: scale(0.85); }
+  60% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+// Each route (create / analyze / report / edit / export) fades in.
+.page-transition { animation: fade-up 0.26s ease both; }
+// Each wizard step re-mounts through this wrapper, so every step animates.
+.step-panel { animation: fade-up 0.22s ease both; }
+.entry-card, .banner { animation: fade-in 0.2s ease both; }
+.feature { animation: fade-up 0.3s ease both; }
+.grid--3 > :nth-child(2) { animation-delay: 0.05s; }
+.grid--3 > :nth-child(3) { animation-delay: 0.1s; }
+.grid--3 > :nth-child(4) { animation-delay: 0.15s; }
+
+.stepper__item, .wizard-steps__item {
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.stepper__item.active .stepper__num,
+.wizard-steps__item.active .wizard-steps__num { animation: pop 0.25s ease; }
+
+.wizard-progress {
+  height: 4px;
+  margin: -8px 0 18px;
+  border-radius: 999px;
+  background: $bg-elevated-2;
+  overflow: hidden;
+  span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, $accent, $accent-2);
+    transition: width 0.3s ease;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-transition, .step-panel, .entry-card, .banner, .feature,
+  .stepper__item.active .stepper__num, .wizard-steps__item.active .wizard-steps__num {
+    animation: none;
+  }
+  .wizard-progress span { transition: none; }
+}

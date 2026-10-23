@@ -14,6 +14,8 @@ import { validateTexSource, validatePdfBytes } from "./latex/validate.js";
 import { compileToPdf, latexEngineAvailable } from "./latex/compile.js";
 import { getEmbeddingClient } from "./embeddings.js";
 import { getClientId, put, get, clearAll, exportProject, importProject } from "./storage/db.js";
+import { backendConfigured, extractJobRemote, parseResumeRemote } from "./backend.js";
+import { jobFromBackend, resumeFromBackend } from "./backendAdapters.js";
 
 let semanticMode = "lexical";
 const artifacts = new Map();
@@ -70,15 +72,34 @@ export const engine = {
   async parseResume(file) {
     const name = (file && file.name) || "resume.tex";
     const lower = name.toLowerCase();
-    let resume;
-    if (lower.endsWith(".tex")) {
-      const text = await file.text();
-      resume = parseTex(text, name);
-    } else if (lower.endsWith(".pdf")) {
-      resume = await parsePdfFile(file);
-    } else {
-      throw new Error("Unsupported file type. Upload a .tex or .pdf resume.");
+    let resume = null;
+    let backendError = null;
+
+    if (backendConfigured && (lower.endsWith(".tex") || lower.endsWith(".pdf"))) {
+      try {
+        resume = resumeFromBackend(await parseResumeRemote(file));
+      } catch (err) {
+        backendError = err;
+      }
     }
+
+    if (!resume) {
+      if (lower.endsWith(".tex")) {
+        const text = await file.text();
+        resume = parseTex(text, name);
+      } else if (lower.endsWith(".pdf")) {
+        resume = await parsePdfFile(file);
+      } else {
+        throw new Error("Unsupported file type. Upload a .tex or .pdf resume.");
+      }
+      if (backendError) {
+        resume.warnings = [
+          ...(resume.warnings || []),
+          `The optional backend could not parse this file (${backendError.message}). The local parser was used instead.`,
+        ];
+      }
+    }
+
     const id = newId();
     resume.id = id;
     await put("resumes", {
@@ -102,7 +123,27 @@ export const engine = {
   },
 
   async extractJobUrl(url) {
+    let backendError = null;
+    if (backendConfigured) {
+      try {
+        const payload = await extractJobRemote({ url });
+        if (payload && payload.job) {
+          const job = jobFromBackend(payload.job, { source: "url", url });
+          const id = await saveJob(job, "url", url);
+          return { job, id };
+        }
+      } catch (err) {
+        backendError = err;
+      }
+    }
+
     const job = await fetchJobFromUrl(url);
+    if (backendError) {
+      job.warnings = [
+        ...(job.warnings || []),
+        `The optional backend could not import this URL (${backendError.message}). Your browser fetched it instead.`,
+      ];
+    }
     const id = await saveJob(job, "url", url);
     return { job, id };
   },
@@ -111,7 +152,28 @@ export const engine = {
     if (!text || text.trim().length < 40) {
       throw new Error("Please paste a longer job description (at least 40 characters).");
     }
+
+    let backendError = null;
+    if (backendConfigured) {
+      try {
+        const payload = await extractJobRemote({ text, title, company });
+        if (payload && payload.job) {
+          const job = jobFromBackend(payload.job, { source: "text" });
+          const id = await saveJob(job, "text", "");
+          return { job, id };
+        }
+      } catch (err) {
+        backendError = err;
+      }
+    }
+
     const job = extractJobFromText(text, title, company);
+    if (backendError) {
+      job.warnings = [
+        ...(job.warnings || []),
+        `The optional backend could not structure this description (${backendError.message}). The local extractor was used instead.`,
+      ];
+    }
     const id = await saveJob(job, "text", "");
     return { job, id };
   },
@@ -225,7 +287,7 @@ export const engine = {
     }
 
     const { resume: newResume, applied } = applyApprovedChanges(resume, suggestions, decisions);
-    const texSource = renderResume(newResume);
+    const texSource = renderResume(newResume, newResume.template);
     const versionId = newId();
     await put("versions", {
       id: versionId,
@@ -258,7 +320,7 @@ export const engine = {
     }
     if (!source) {
       structured = { ...resumeRecord.baseline };
-      source = renderResume(structured);
+      source = renderResume(structured, structured.template);
     }
 
     const texArtifactId = artifactFor(new Blob([source], { type: "application/x-tex" }), `${resume_id}_resume.tex`);

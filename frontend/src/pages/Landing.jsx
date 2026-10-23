@@ -47,8 +47,11 @@ export default function Landing() {
           produces a truthful, tailored LaTeX resume you can compile and download.
         </p>
         <div className="row" style={{ marginTop: 24 }}>
-          <Link to="/workspace" className="btn btn--primary">
-            Analyze my resume →
+          <Link to="/create" className="btn btn--primary">
+            Create a resume →
+          </Link>
+          <Link to="/workspace" className="btn btn--ghost">
+            Check against a job
           </Link>
           <button
             type="button"
@@ -57,6 +60,42 @@ export default function Landing() {
           >
             How it works
           </button>
+        </div>
+      </section>
+
+      <section className="section-gap">
+        <h2>Three ways to use AlignCV</h2>
+        <div className="grid grid--3">
+          <div className="card feature">
+            <div className="feature__icon" aria-hidden="true">✍️</div>
+            <div className="feature__title">Create a resume</div>
+            <div className="feature__text">
+              A structured, step-by-step builder with normalized dates and consistent formatting.
+            </div>
+            <Link to="/create" className="btn btn--sm" style={{ marginTop: 12 }}>
+              Start building
+            </Link>
+          </div>
+          <div className="card feature">
+            <div className="feature__icon" aria-hidden="true">🎯</div>
+            <div className="feature__title">Check against a job</div>
+            <div className="feature__text">
+              Upload a resume, add a job posting, and see traditional and semantic evidence side by side.
+            </div>
+            <Link to="/workspace" className="btn btn--sm" style={{ marginTop: 12 }}>
+              Run a match
+            </Link>
+          </div>
+          <div className="card feature">
+            <div className="feature__icon" aria-hidden="true">🛠️</div>
+            <div className="feature__title">Edit an existing resume</div>
+            <div className="feature__text">
+              Upload a .tex or PDF, review the parsed content, and correct uncertain fields.
+            </div>
+            <Link to="/workspace" className="btn btn--sm" style={{ marginTop: 12 }}>
+              Upload a resume
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -90,10 +129,10 @@ export default function Landing() {
         <div className="card">
           <h2>Your data, your call</h2>
           <ul className="muted">
-            <li>Runs entirely in your browser - there is no server to send data to.</li>
+            <li>Runs locally in your browser by default; an optional backend adds server-side job extraction and PDF compilation.</li>
             <li>Works offline with a deterministic fallback - no paid AI keys required.</li>
             <li>Your resumes and results are stored only on your device (IndexedDB).</li>
-            <li>Resume contents never leave your device; local AI embeddings run on your hardware.</li>
+            <li>Resume contents are processed locally; only a job URL you choose to import is sent to the optional backend.</li>
             <li>Your original resume is preserved as an immutable baseline.</li>
             <li>You can export or delete all your local data at any time from the workspace.</li>
           </ul>

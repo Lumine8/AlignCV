@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client.js";
+import { backendConfigured } from "../lib/backend.js";
+import { readClipboardText } from "../lib/clipboard.js";
 import Dropzone from "../components/Dropzone.jsx";
 import ErrorBanner from "../components/ErrorBanner.jsx";
 import Loading from "../components/Loading.jsx";
@@ -32,6 +34,7 @@ export default function Workspace() {
   const [jobText, setJobText] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [jobCompany, setJobCompany] = useState("");
+  const [jobPasteMessage, setJobPasteMessage] = useState("");
   const [jobLoading, setJobLoading] = useState(false);
   const [job, setJob] = useState(session.job);
   const [jobId, setJobId] = useState(session.jobId);
@@ -139,6 +142,23 @@ export default function Workspace() {
     }
   }
 
+  async function handlePasteFromClipboard() {
+    setError(null);
+    const result = await readClipboardText();
+    if (result.ok) {
+      setJobText(result.text);
+      setJobPasteMessage(`Pasted ${result.text.length.toLocaleString()} characters from the clipboard.`);
+      return;
+    }
+    if (result.reason === "empty") {
+      setJobPasteMessage("Clipboard is empty.");
+    } else if (result.reason === "denied") {
+      setJobPasteMessage("Clipboard access was blocked — use Ctrl+V to paste instead.");
+    } else {
+      setJobPasteMessage("Clipboard reading isn't available here — use Ctrl+V to paste instead.");
+    }
+  }
+
   async function handleExtractJob() {
     setError(null);
     setJobLoading(true);
@@ -200,12 +220,18 @@ export default function Workspace() {
         <div className="banner banner--info">
           <span aria-hidden="true">⚙</span>
           <div>
-            Everything runs locally in your browser - there is no server. Semantic engine:{" "}
-            <strong>{health.capabilities.semantic_backend}</strong> · LaTeX PDF compilation:{" "}
+            Core analysis runs locally in your browser
+            {backendConfigured
+              ? "; the optional backend handles file/job imports and PDF compilation when reachable"
+              : " - there is no server"}
+            . Semantic engine: <strong>{health.capabilities.semantic_backend}</strong> · LaTeX PDF
+            compilation:{" "}
             <strong>
               {health.capabilities.latex_compilation_available
                 ? health.capabilities.latex_compiler
-                : "unavailable (.tex source still exportable)"}
+                : backendConfigured
+                  ? "reported by the optional backend when compiling"
+                  : "unavailable (.tex source still exportable)"}
             </strong>
           </div>
         </div>
@@ -356,7 +382,8 @@ export default function Workspace() {
               />
               <span className="hint">
                 Postings hosted on Greenhouse, Lever, Ashby or SmartRecruiters load automatically.
-                Login-gated or JavaScript-heavy pages may still fail; use the text option then.
+                Login-gated or JavaScript-heavy pages may still fail; use Paste text (or the
+                clipboard button) then.
               </span>
             </div>
           ) : (
@@ -382,7 +409,17 @@ export default function Workspace() {
                 </div>
               </div>
               <div className="field">
-                <label htmlFor="job-text">Job description</label>
+                <div className="row">
+                  <label htmlFor="job-text">Job description</label>
+                  <span className="spacer" />
+                  <button
+                    type="button"
+                    className="btn btn--sm btn--ghost"
+                    onClick={handlePasteFromClipboard}
+                  >
+                    Paste from clipboard
+                  </button>
+                </div>
                 <textarea
                   id="job-text"
                   className="textarea"
@@ -390,6 +427,7 @@ export default function Workspace() {
                   onChange={(e) => setJobText(e.target.value)}
                   placeholder="Paste the full job description here…"
                 />
+                {jobPasteMessage && <span className="hint">{jobPasteMessage}</span>}
               </div>
             </>
           )}

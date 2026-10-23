@@ -113,7 +113,7 @@ function matchRequirement(requirement, index, ctx) {
     if (requirement.category === "education" && !ctx.hasEducation) {
       status = "uncertain";
       notes.push("The resume does not include a clear education section.");
-    } else if (requirement.category === "location" && !ctx.hasLocation) {
+    } else if ((requirement.category === "location" || requirement.category === "constraint") && !ctx.hasLocation) {
       status = "uncertain";
       notes.push("The resume does not state a location or work authorization.");
     } else if (requirement.category === "certification" && !ctx.hasCertification) {

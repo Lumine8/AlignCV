@@ -2,13 +2,15 @@
 
 **Understand the job. Prove your fit. Optimize your resume.**
 
-AlignCV is a **100% client-side** resume intelligence and LaTeX tool. It reads a
-job posting and your resume, runs **traditional** and **semantic** matching side
-by side, reconciles them into transparent metrics with **evidence for every
-claim**, and generates a truthful, tailored LaTeX resume you can download.
+AlignCV is a resume intelligence and LaTeX tool. It reads a job posting and your
+resume, runs **traditional** and **semantic** matching side by side, reconciles
+them into transparent metrics with **evidence for every claim**, and generates a
+truthful, tailored LaTeX resume you can download.
 
-Everything runs in your browser. There is no backend, no account, no API key,
-and no server that receives your data.
+The frontend is **local-first**: the static build works with no server, database,
+or API key, and stores projects in your browser. An optional **FastAPI backend**
+adds server-side resume parsing, job-URL extraction and LaTeX compilation when
+configured; without it, AlignCV keeps working in fully local browser mode.
 
 > AlignCV presents **its own** match estimates. They are **not** any employer's
 > ATS score and **not** a probability of receiving an interview.
@@ -17,15 +19,20 @@ and no server that receives your data.
 
 ## Highlights
 
-- **Runs entirely in the browser** — deploy as a static site. No server, no
-  database, no secrets.
+- **Local-first** — the static frontend runs with no server, database, or secrets.
+  A FastAPI backend is optional and used only when `VITE_API_BASE_URL` is set.
 - **Resume ingestion** — `.tex` (LaTeX-preserving parser) and `.pdf` (via
   [PDF.js](https://mozilla.github.io/pdf.js/): text extraction, link recovery,
-  scanned-page detection).
-- **Job extraction** — paste text directly, or import a public URL. Postings
-  hosted on **Greenhouse, Lever, Ashby or SmartRecruiters** are read from each
-  platform's own public, CORS-enabled JSON API; other pages use a CORS-aware
-  HTML fetch that asks you to paste instead when a site blocks browser access.
+  scanned-page detection). When the optional backend is configured, uploads can
+  instead be parsed server-side with `pypdf` and the same conservative
+  reconstruction rules, with automatic fallback to the browser parser.
+- **Job extraction** — paste text directly (or use the **Paste from clipboard**
+  button), or import a public URL. Postings hosted on **Greenhouse, Lever, Ashby
+  or SmartRecruiters** are read from each platform's own public, CORS-enabled
+  JSON API; other pages use a CORS-aware HTML fetch that asks you to paste
+  instead when a site blocks browser access. With the optional backend enabled,
+  the server fetches the posting (SSRF-guarded) before falling back to the
+  browser.
 - **Traditional engine** — exact + alias matching, must-have vs preferred rules,
   experience-duration derivation, a configurable skill dictionary.
 - **Semantic engine** — optional **local AI embeddings** via
@@ -83,11 +90,39 @@ npm run dev
 
 Then open http://localhost:5173.
 
+### Optional backend
+
+Requirements: **Python 3.11+** (tested on 3.12).
+
+```powershell
+# from the repository root
+Copy-Item backend\.env.example backend\.env
+powershell -ExecutionPolicy Bypass -File scripts\backend-dev.ps1
+```
+
+The API is then available at http://localhost:8000 (`GET /api/health`, or the
+`/health` convenience alias). To point
+the frontend at it, copy `frontend\.env.example` to `frontend\.env`; leaving
+`VITE_API_BASE_URL` empty keeps the app in local browser mode.
+
+### Environment files and secrets
+
+- Copy `backend\.env.example` and `frontend\.env.example`; never commit the real
+  `.env` files.
+- `.gitignore` excludes `.env`, `.env.*` (except examples), virtual
+  environments, Python caches, coverage output, logs, build output, and local
+  test artifacts.
+- Put API keys and other credentials in `.env` files, host environment
+  variables, or your deployment provider's secret store. Do not put secrets in
+  source files, docs, or committed configuration.
+
 Helper scripts (PowerShell):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/dev.ps1    # dev server
-powershell -ExecutionPolicy Bypass -File scripts/build.ps1  # static build
+powershell -ExecutionPolicy Bypass -File scripts/dev.ps1          # frontend dev server
+powershell -ExecutionPolicy Bypass -File scripts/backend-dev.ps1  # FastAPI dev server
+powershell -ExecutionPolicy Bypass -File scripts/build.ps1        # static build
+powershell -ExecutionPolicy Bypass -File scripts/test.ps1         # backend + frontend tests
 ```
 
 ---
@@ -95,9 +130,12 @@ powershell -ExecutionPolicy Bypass -File scripts/build.ps1  # static build
 ## Testing
 
 The ported engines are covered by a [Vitest](https://vitest.dev/) suite
-(`frontend/test/engines.test.js`) — text/date utilities, the skill dictionary,
-`.tex` parsing, job structuring, both matching engines, hybrid reconciliation,
-the suggestion/claim guards, and LaTeX rendering + validation.
+(`frontend/test/`) — text/date utilities, the skill dictionary, `.tex` parsing,
+job structuring, ATS URL resolution, both matching engines, hybrid
+reconciliation, the suggestion/claim guards, LaTeX rendering + validation, and
+the clipboard reader's permission/fallback paths. `backendFlow.test.js` runs a
+backend-parsed resume and structured job through matching → review → apply →
+export to catch adapter/shape regressions.
 
 ```powershell
 cd frontend
@@ -106,6 +144,140 @@ npm run test:watch
 ```
 
 Run `npm test` and `npm run build` before committing.
+
+### Backend
+
+Always use the project virtual environment; a system or conda `pytest` may
+crash while loading unrelated third-party plugins and report tests as failed or
+skipped. Both pytest configs disable Anaconda's unrelated `dash` plugin
+(`addopts = -p no:dash`), which otherwise fails before collection with
+`ModuleNotFoundError: importlib_metadata`.
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pytest
+```
+
+From the repository root, `scripts\test.ps1` runs both suites with the correct
+interpreters (the root `pytest.ini` also makes `backend\.venv\Scripts\python.exe -m pytest`
+work from the root). Backend tests cover the schemas, LaTeX render/compile
+routes, `.tex`/PDF parsing, job structuring, ATS URL parsing, SSRF/URL guards,
+upload limits, and HTML/JSON-LD cleaning.
+
+---
+
+## Backend (FastAPI)
+
+`backend/app/` is a modular FastAPI service:
+
+| Path | Responsibility |
+| --- | --- |
+| `main.py` | App factory, CORS, error handlers |
+| `config.py` | Environment-driven settings (`ALIGNCV_*`) |
+| `errors.py` | Client-safe error codes |
+| `schemas/` | Shared Pydantic models (resume, job, analysis, latex) |
+| `services/latex/render.py` | Structured model → ATS-safe LaTeX (`ats`, `classic`) |
+| `services/latex/compile.py` | Engine detection + isolated compilation |
+| `services/latex/validate.py` | PDF text extraction + content checks |
+| `services/parsing/tex.py` | Server-side `.tex` parsing → structured resume |
+| `services/parsing/pdf.py` | `pypdf` text/link extraction + reconstruction |
+| `services/jobs/extract.py` | Deterministic job-requirement structuring |
+| `services/jobs/fetch.py` | SSRF-guarded fetch, HTML/JSON-LD, ATS adapters |
+| `services/skills.py` | Skill aliases and canonicalization |
+| `api/routes/` | HTTP routes (`/api/health` and `/health`, `/api/latex/*`, `/api/resumes/*`, `/api/jobs/*`) |
+
+Implemented now: health/capabilities, CORS allow-list, the shared resume/job/
+analysis schemas, LaTeX rendering with two single-column templates, sandboxed
+compilation (tectonic/pdflatex detection), PDF validation against the structured
+document, `.tex`/PDF resume parsing into the shared resume model, and secure
+server-side job extraction (HTML, JSON-LD, ATS APIs).
+
+### Parsing and job endpoints
+
+- `POST /api/resumes/parse` — multipart `file` (`.tex` or `.pdf`, default 10 MB
+  limit) → `{document, source_type, filename, original_text, raw_tex,
+  parse_confidence, warnings}`. Scanned/image-only PDFs return a clear
+  `parse_failed` error instead of fabricated content.
+- `POST /api/jobs/extract` — either `{url}` or `{text, title?, company?}` →
+  `{status: "ok", job}`. Requirements keep their source wording and include
+  category, required/preferred importance, must-have/critical flags, minimum
+  years when stated, and canonical skill keywords.
+
+### LaTeX endpoints
+
+- `POST /api/latex/render` — `{document, template?}` → `{source, template, warnings}`.
+  Escapes user text, follows `metadata.section_order` and `metadata.date_format`.
+- `POST /api/latex/compile` — `{document | source, template?, run_validation?}`.
+  Always returns the generated `source`. `status` is `success` (with base64 PDF
+  bytes), `unavailable` (no engine installed), or `failed` (with log/errors).
+
+Templates (`ats`, `classic`) change typography and margins only; content is
+identical. Unsupported templates return the `invalid_template` error code.
+
+### Security defaults
+
+- CORS is an explicit allow-list (`ALIGNCV_CORS_ORIGINS`).
+- Upload, fetch, and compilation size/time limits are configurable.
+- Job URL fetches allow only public http(s) hosts on standard ports, reject
+  credentials and private/loopback/link-local addresses (including DNS results),
+  re-validate every redirect, and cap response size/time. There is no LinkedIn
+  scraping, login bypass, CAPTCHA solving, or anti-bot circumvention.
+- LaTeX runs with `-no-shell-escape`, a minimal environment, a temporary
+  directory, and a hard timeout; no user-supplied shell commands are executed.
+- API errors return stable `code` values instead of internal paths.
+
+### Deploying the backend (Render)
+
+1. Create a Render Web Service with root directory `backend/`.
+2. Build: `pip install -r requirements.txt`
+3. Start: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+4. Set `ALIGNCV_CORS_ORIGINS` to your deployed frontend origin.
+5. Set `ALIGNCV_ENVIRONMENT=production` and `ALIGNCV_DEBUG=false`.
+
+Install `tectonic` (or TeX Live) in the image for server-side PDF compilation;
+otherwise `/api/health` reports `latex_compilation_available: false` and the app
+still exports `.tex`.
+
+---
+
+## Implementation status
+
+This repository is being built in phases.
+
+- **Phase 1 — complete:** backend scaffold (app factory, settings, CORS, error
+  envelope), shared Pydantic schemas, LaTeX engine detection/compilation, health
+  route, tests, env examples, dev scripts.
+- **Phase 2 — complete:** shared structured resume model (normalized dates,
+  validation, engine adapter), seven-step Create wizard at `/create` with
+  autosaved drafts, add/remove/reorder entries and sections, date-format and
+  section-order settings, review screen, save to IndexedDB, JSON download, and
+  a hand-off into the analysis workspace.
+- **Phase 3 — complete:** LaTeX rendering for the structured model with `ats`
+  and `classic` templates, ordered sections, normalized date formats, safe
+  escaping, and link handling; `/api/latex/render` and `/api/latex/compile`
+  endpoints; PDF text extraction/validation; offline `.tex` download in the
+  Create wizard plus optional backend PDF compilation with honest
+  `unavailable`/`failed` states.
+- **Phase 4 — complete:** server-side `.tex`/PDF parsing into the shared
+  `ResumeDocument`; deterministic job structuring with requirement categories,
+  required/preferred importance and minimum years; SSRF-guarded job URL
+  fetching with HTML/JSON-LD cleaning and Greenhouse/Lever/Ashby/
+  SmartRecruiters adapters; `/api/resumes/parse` and `/api/jobs/extract`; the
+  optional frontend now uses these endpoints for uploads and job imports with
+  automatic browser fallback.
+- **Phase 5 — complete:** end-to-end QA of backend-parsed resumes/jobs through
+  the browser matching → review → apply → export pipeline. Parsed section order,
+  date format and template now survive export; flat skills participate in
+  semantic matching; backend `constraint` requirements keep the
+  location/authorization uncertainty rule; layout changes update the export order.
+- **Next:** deployment hardening and final documentation review.
+
+The current development machine has no LaTeX engine, so PDF compilation is
+reported as `unavailable` here; `.tex` export and all backend render/validation
+tests still run. Server-side PDF compilation requires installing Tectonic or TeX
+Live.
 
 ---
 
@@ -195,7 +367,12 @@ the UI never claims a PDF was produced.
 
 ## Privacy & data
 
-- There is **no server** and no telemetry. Your files are never uploaded.
+- AlignCV runs fully in the browser by default. An optional FastAPI backend adds
+  server-side resume parsing, job extraction, and PDF compilation; it is not
+  required.
+- With the backend enabled, the resume file, job URL, or job description you
+  submit is sent to it for parsing/extraction. Without the backend, those paths
+  use the browser fallback.
 - Parsed resumes, jobs, analyses and versions live in **IndexedDB** in your
   browser, keyed by an anonymous local id.
 - Local AI runs on your hardware; the only network request is the one-time model
@@ -213,7 +390,8 @@ the UI never claims a PDF was produced.
 - The lexical semantic fallback estimates relatedness, not proof of experience.
 - PDF resume parsing cannot recover the original LaTeX, so it reconstructs a
   clean editable representation.
-- In-browser PDF compilation is not bundled; `.tex` export always works.
+- In-browser PDF compilation is not bundled; `.tex` export always works. The
+  optional backend compiles PDFs only when Tectonic or TeX Live is installed.
 
 ---
 
@@ -224,15 +402,27 @@ AlignCV/
 ├─ frontend/
 │  ├─ src/
 │  │  ├─ api/client.js        # local engine facade (keeps pages unchanged)
-│  │  ├─ components/          # Layout, Stepper, MetricCard, ...
-│  │  ├─ lib/                 # ported engines (see table above)
-│  │  ├─ pages/               # Landing, Workspace, MatchReport, Editor, Export
+│  │  ├─ components/          # Layout, Stepper, create/ form primitives, ...
+│  │  ├─ lib/                 # local engines (see table above)
+│  │  │  └─ resume/           # structured model + draft/IndexedDB storage
+│  │  ├─ pages/               # Landing, CreateResume, Workspace, MatchReport, Editor, Export
 │  │  ├─ state/session.jsx    # workflow state (localStorage)
 │  │  └─ styles/              # SCSS
 │  ├─ test/                   # Vitest suite + fixtures
 │  ├─ index.html
 │  └─ vite.config.js
-├─ scripts/                   # dev.ps1 / build.ps1
+├─ backend/
+│  ├─ app/
+│  │  ├─ api/routes/          # health, latex, resume parsing, job extraction
+│  │  ├─ schemas/             # shared Pydantic models
+│  │  └─ services/            # latex/, parsing/, jobs/, skills dictionary
+│  ├─ tests/                  # pytest suite
+│  ├─ requirements.txt
+│  ├─ requirements-dev.txt
+│  ├─ pyproject.toml
+│  └─ .env.example
+├─ scripts/                   # dev / backend-dev / build / test
+├─ pytest.ini
 ├─ vercel.json
 └─ README.md
 ```

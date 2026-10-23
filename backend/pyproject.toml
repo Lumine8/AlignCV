@@ -1,0 +1,10 @@
+[project]
+name = "aligncv-backend"
+version = "0.1.0"
+description = "AlignCV extraction, matching, and LaTeX services"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-p no:dash"

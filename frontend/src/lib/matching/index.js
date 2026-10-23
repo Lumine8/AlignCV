@@ -40,6 +40,18 @@ export class ResumeIndex {
         });
       }
     }
+    if (this.skills.length) {
+      const text = this.skills.join(", ");
+      this.entries.push({
+        item_id: "skills",
+        section: "Skills",
+        kind: "skill",
+        title: "Skills",
+        text,
+        search_text: normalize(text),
+        technologies: [...this.skills],
+      });
+    }
   }
 
   get fullText() {

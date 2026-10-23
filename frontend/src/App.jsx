@@ -1,6 +1,7 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import Layout from "./components/Layout.jsx";
 import Landing from "./pages/Landing.jsx";
+import CreateResume from "./pages/CreateResume.jsx";
 import Workspace from "./pages/Workspace.jsx";
 import MatchReport from "./pages/MatchReport.jsx";
 import Editor from "./pages/Editor.jsx";
@@ -13,11 +14,13 @@ function RequireAnalysis({ children }) {
   return children;
 }
 
-export default function App() {
+function AppRoutes() {
+  const location = useLocation();
   return (
-    <Layout>
-      <Routes>
+    <div className="page-transition" key={location.pathname}>
+      <Routes location={location}>
         <Route path="/" element={<Landing />} />
+        <Route path="/create" element={<CreateResume />} />
         <Route path="/workspace" element={<Workspace />} />
         <Route
           path="/report"
@@ -45,6 +48,14 @@ export default function App() {
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <Layout>
+      <AppRoutes />
     </Layout>
   );
 }

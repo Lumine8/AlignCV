@@ -5,6 +5,7 @@
 const DEFAULT_WEIGHTS = { traditional: 0.4, semantic: 0.6 };
 const MATCH_THRESHOLD = 0.6;
 const PARTIAL_THRESHOLD = 0.2;
+const CONTRADICTION_SIM = 0.2;
 
 function mergeEvidence(...groups) {
   const merged = new Map();
@@ -27,7 +28,7 @@ function combinedStatus(trad, sem) {
   else if (t <= PARTIAL_THRESHOLD && s < 0.38) status = ["uncertain", "missing"].includes(trad.status) ? trad.status : "missing";
   else status = "partial";
 
-  if (trad.status === "matched" && sem.status === "missing") {
+  if (trad.status === "matched" && sem.status === "missing" && s < CONTRADICTION_SIM) {
     status = "conflict";
     notes.push("Traditional matching found keyword evidence but the semantic engine did not find related context. Confirm the claim is accurate and well described.");
   } else if (trad.status === "missing" && sem.status === "matched") {

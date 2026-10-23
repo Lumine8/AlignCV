@@ -16,6 +16,9 @@ export default function Layout({ children }) {
             </span>
           </Link>
           <nav className="topbar__nav">
+            <NavLink to="/create" className={({ isActive }) => (isActive ? "active" : "")}>
+              Create
+            </NavLink>
             <NavLink to="/workspace" className={({ isActive }) => (isActive ? "active" : "")}>
               Workspace
             </NavLink>
